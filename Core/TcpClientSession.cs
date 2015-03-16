@@ -92,6 +92,12 @@ namespace SuperSocket.ClientEngine
 
         public override void Connect()
         {
+            //ConnectUsingSocketStaticMethod();
+            ConnectUsingSocketInstanceMethod();
+        }
+
+        public void ConnectUsingSocketStaticMethod()
+        {
             if (m_InConnecting)
                 throw new Exception("The socket is connecting, cannot connect again!");
 
@@ -115,6 +121,53 @@ namespace SuperSocket.ClientEngine
 #else
             RemoteEndPoint.ConnectAsync(ProcessConnect, null);
 #endif
+        }
+
+        protected void ProcessConnect2(object socket, SocketAsyncEventArgs e)
+        {
+            if (e != null && e.SocketError != SocketError.Success)
+            {
+                m_InConnecting = false;
+                OnError(new SocketException((int)e.SocketError));
+                return;
+            }
+
+            if (socket == null)
+            {
+                m_InConnecting = false;
+                OnError(new SocketException((int)SocketError.ConnectionAborted));
+                return;
+            }
+
+            if (e == null)
+                e = new SocketAsyncEventArgs();
+
+            e.Completed += SocketEventArgsCompleted;
+
+            Client = socket as Socket;
+
+            m_InConnecting = false;
+
+#if !SILVERLIGHT
+            //Set keep alive
+			Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+#endif
+            OnGetSocket(e);
+        }
+
+        public void ConnectUsingSocketInstanceMethod()
+        {
+            string result = string.Empty;
+
+            Client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+            SocketAsyncEventArgs socketEventArg = new SocketAsyncEventArgs();
+            socketEventArg.RemoteEndPoint = RemoteEndPoint;
+
+            socketEventArg.Completed += new EventHandler<SocketAsyncEventArgs>(ProcessConnect2);
+
+            Client.ConnectAsync(socketEventArg);
+
         }
 
         void Proxy_Completed(object sender, ProxyEventArgs e)
